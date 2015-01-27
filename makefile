@@ -1,6 +1,8 @@
 
 ARCH := x86_64
-TARGET = hellok.elf 
+TARGET = hellok.elf
+
+ 
 all:$(TARGET)
 clean:
 	rm -f *.o *.elf *.bin

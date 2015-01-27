@@ -1,4 +1,3 @@
-
 #define WHITE_SPACE 0x07
 #define VIDEO_MEMORY 0xb8000
 
@@ -52,6 +51,4 @@ void kernel_main()
 		printxy("Hello World", 0, 0);
 	}
 }
-
-
 
