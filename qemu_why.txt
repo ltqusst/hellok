@@ -30,6 +30,9 @@ how simulation of serial port is done?
 	qemu_chr_fe_write_all(): we can find lot of simulated device call this function to do the job, this function will 
 	pass the call on to the backend CharDriverState * chr to do the real job.
 	
+	TYPE_DIGIC_UART
+	TYPE_LM32_JUART
+	TYPE_MILKYMIST_UART
 	digic_uart_write, line 78:  qemu_chr_fe_write_all(s->chr, &ch, 1);
 ================================================
 backend char driver
@@ -37,14 +40,28 @@ backend char driver
 	the driver item have: 
 		name("socket","udp","file","tty","stdio","pty","pipe","console"...)
 		kind(CHARDEV_BACKEND_KIND_XXX)
-		parse(a callback function 
-================================================	
-QemuOptsList *vm_config_groups[32];	
-	search qemu_add_opts() in whole project.
-	there are currently total 31 option category.each category ave a QemuOptsList;
-		
+		parse(a callback function that 
+================================================
+QEMUMachine/MachineClass
+	boards.h defines the board level simulation model.
+	pc_machine_init() is module constructor in file /hw/i386/pc_piix.c
+	it register lots of available pc machine(virtual machine)
+	
+================================================
+The core configuration data structure: QemuOptsList *vm_config_groups[32];	
+
+	* a virtual machine's whole internal configuration is represented by this data structure.
+	  - see qemu_read_config_file() & qemu_read_default_config_files();
+	        the whole config is build upon Opts.
+	  - see vl.c:main(), entire opts internal representation build from command line args. 
+	
+	vl.c:main() the very first thing main() does is call qemu_add_opts() to build-up opts group entry(QemuOptsList).
+	currently total 31 opts group.
 	Opts,OptsList is a string structured option parameter(Opt);
-	basically for easy access & maintain.
+	
+	the implementation is complex and urgly, but the function it provides is very clean,flexible and usefull.
+	caller can access opt by group:id:name, it's like a dictionary of all options for a virtual machine, including
+	front/backend configuration.
 	
 	the last list item of vm_config_groups[31] is reserved as NULL guard.
 		name: 				drive, chardev, device, netdev, ...
