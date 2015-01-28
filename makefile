@@ -1,15 +1,15 @@
 
 ARCH := x86_64
 
-all:hello.elf
+all:hellok.elf
 clean:
-	rm -f *.o *.elf
+	rm -f *.o *.elf *.bin
 	
-hello.elf: hello.o startup.o
-	ld -T link.ld --oformat elf32-i386 -o kernel.bin startup.o hello.o
+hellok.elf: hello.o startup.o
+	ld -T link.ld --oformat elf32-i386 -o hellok.elf startup.o hello.o
 
 %.o : %.c 
-	gcc -Wp,-MD,.$@.d -c -o $@ $<
+	gcc -g -Wp,-MD,.$@.d -c -o $@ $<
 
 %.o : %.s
-	as  -o $@ $<
+	as  -g --gstabs -o $@ $<
