@@ -1,15 +1,16 @@
-
 ARCH := x86_64
+TARGET = hellok.elf
 
-all:hellok.elf
+ 
+all:$(TARGET)
 clean:
 	rm -f *.o *.elf *.bin
 	
-hellok.elf: hello.o startup.o
-	ld -T link.ld --oformat elf32-i386 -o hellok.elf startup.o hello.o
+$(TARGET): hello.o startup.o
+	ld -T link.ld --oformat elf32-i386 -o $@ $^
 
 %.o : %.c 
-	gcc -g -Wp,-MD,.$@.d -c -o $@ $<
+	gcc -g -nostdlib -nostartfiles  -Wp,-MD,.$@.d -c -o $@ $<
 
 %.o : %.s
-	as  -g --gstabs -o $@ $<
+	as -g -o $@ $<

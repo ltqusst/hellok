@@ -1,4 +1,3 @@
-
 #define WHITE_SPACE 0x07
 #define VIDEO_MEMORY 0xb8000
 
@@ -31,15 +30,19 @@ void printxy(char *message, unsigned int x, unsigned int y)
 		*message++;
 	}
 }
-
+extern unsigned int bss;
+extern unsigned int bss_end;
 void kernel_main()
 {
 	int i;
 	char data[5]={0};
+
+	for(i=0;i<bss_end-bss;i++) ((char*)bss)[i] = 0;
+
 	clrscr();
 	for(i=0;;i++)
 	{
-		data[3] = '0'+(i & 0xFF);
+		data[3] = '0'+((int)(&bss) & 0xFF);
 		data[2] = '0'+((i>>8) & 0xFF);
 		data[1] = '0'+((i>>16) & 0xFF);
 		data[0] = '0'+((i>>24) & 0xFF);
@@ -48,6 +51,4 @@ void kernel_main()
 		printxy("Hello World", 0, 0);
 	}
 }
-
-
 

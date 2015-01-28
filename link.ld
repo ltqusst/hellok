@@ -19,7 +19,9 @@ SECTIONS
 	.bss : AT(phys + (bss - code))
 	{
 		bss = .;
+		bss2 = .;
 		*(.bss)
+		bss_end = .;
 		. = ALIGN(4096);
 	}
 	.rodata : AT(phys + (rodata - code))
