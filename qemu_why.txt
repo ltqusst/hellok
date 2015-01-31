@@ -1,5 +1,78 @@
 * simple code segement comment is useless.
 * framework summary + code reference are fine
+* first we need to know how hardware is working, QEMU is just emulate it.
+* unlike embedded system with fixed configuration, PC industry having very flexible configuration
+  that user can customize, for example, having more memory/install new device, a bus is necessary for this.
+
+	about PC architecture:
+		http://en.wikipedia.org/wiki/Northbridge_(computing)
+		http://en.wikipedia.org/wiki/Southbridge_(computing)
+		http://en.wikipedia.org/wiki/Low_Pin_Count
+		http://en.wikipedia.org/wiki/Industry_Standard_Architecture
+	about x86 processor: 
+		http://en.wikipedia.org/wiki/Protected_mode
+		http://en.wikipedia.org/wiki/X86_memory_segmentation
+		http://en.wikipedia.org/wiki/Global_Descriptor_Table
+		http://www.jamesmolloy.co.uk/tutorial_html/4.-The%20GDT%20and%20IDT.html
+	about x86 IO space:
+		http://en.wikipedia.org/wiki/Input/output_base_address
+	about PCI bus
+		http://en.wikipedia.org/wiki/Conventional_PCI
+	about BIOS
+		http://en.wikipedia.org/wiki/BIOS
+		
+
+   
+================================================
+the things before main(): module register
+  
+  module is configurable component in QEMU system, 
+  it's existence is determined not statically , but by the compiler-switch, 
+  for example, when compile for host i386, the code for other host will not be compiled,
+  so those modules will not exist in the final QEMU system.
+  
+	module_init(func, type) is a micro used to make a constructor call to register module init funcion.
+	
+	and 4 type-specific module_init version
+		block_init(func): 	regiter a MODULE_INIT_BLOCK type module's init function.
+		machine_init(func): regiter a MODULE_INIT_MACHINE type module's init function.
+		qapi_init(func): 		regiter a MODULE_INIT_QAPI type module's init function.
+		type_init(func): 		regiter a MODULE_INIT_QOM type module's init function.
+	
+	these modules are only register their init function automatically before main() was called, 
+	the execution of the init function was delayed until main() call following function:
+			module_call_init(type);
+  
+	because the init function may need some pre-require.
+	
+	take an example of how a i386 pc default machine is registered and really created:
+	
+	1.register the init() function
+			hw/i386/pc_piix.c
+				line 954:  machine_init(pc_machine_init);
+	2.call the init() function in main() at appropriate time
+	  	main, line 2822:  module_call_init(MODULE_INIT_MACHINE);
+    so here pc_machine_init()will do its work: register lot of machine class(but didn't instantiate)
+	3.find out which machine class the user want:
+			main, line 2823:  machine_class = find_default_machine();
+	4.later on, after collection of all parameters, instantiate the final virtual machine for QEMU:
+		 	main, line 4264:  machine_class->init(current_machine);
+	  the init() mainly is define as(pc_init_pci()->pc_init1()) by most qemu machine typeinfo;
+	  
+	  so pc_init1() is the core init routine of virtual machine.
+================================================
+the i386 PC machine init process : pc_init1()
+ * because every thing a program can see is memory/io space, we only need to emulate things in those spaces.
+ * a very systematic analysis on QEMU start flow:
+   http://www.ibm.com/developerworks/cn/linux/1410_qiaoly_qemubios/
+ * pc_basic_device_init() create lot of basic(slow) peripheral device connected to ISA bus 
+	  including RTC, COM, Parallel, ps2_mouse, floopy.
+		- call serial_isa_init() : 
+			create TYPE_ISA_SERIAL DeviceState * dev with prop "chrdev" equal to chr from serial_hds[]
+			the (*class_init)() function serial_isa_class_initfn() of this dev will be called.
+		- serial_isa_class_initfn():
+		  call memory_region_init_io() to register it's memory access interface: serial_io_ops
+		  this interface is how CPU's command/data routed to the real simulated implementation.
 
 ================================================
 how simulation of serial port is done?
@@ -33,10 +106,6 @@ how simulation of serial port is done?
 	qemu_chr_fe_write_all(): we can find lot of simulated device call this function to do the job, this function will 
 	pass the call on to the backend CharDriverState * chr to do the real job.
 	
-	TYPE_DIGIC_UART
-	TYPE_LM32_JUART
-	TYPE_MILKYMIST_UART
-	digic_uart_write, line 78:  qemu_chr_fe_write_all(s->chr, &ch, 1);
 ================================================
 backend char driver
 	register_types() will be called as constructor, here lot of backend driver registered into GSList * backends;
@@ -44,32 +113,7 @@ backend char driver
 		name("socket","udp","file","tty","stdio","pty","pipe","console"...)
 		kind(CHARDEV_BACKEND_KIND_XXX)
 		parse(a callback function that 
-================================================
-qemu Object model
-	include/qom/object.h
-		
-================================================
-QEMUMachine/MachineClass
-	
-	about PC architecture:
-		http://en.wikipedia.org/wiki/Northbridge_(computing)
-		http://en.wikipedia.org/wiki/Southbridge_(computing)
-		http://en.wikipedia.org/wiki/Low_Pin_Count
-		http://en.wikipedia.org/wiki/Industry_Standard_Architecture
-		
-	boards.h defines the board level simulation model.
-	/hw/i386/pc_piix.c:
-		* pc_machine_init() is module constructor in file it register lots of available pc machine(virtual machine)
-		* pc_init1() is core code to create any virtual machine of i386 pc type
-		*	pc_basic_device_init() create lot of basic(slow) peripheral device connected to ISA bus 
-		  including RTC, COM, Parallel, ps2_mouse, floopy.
-			- call serial_isa_init() : 
-				create TYPE_ISA_SERIAL DeviceState * dev with prop "chrdev" equal to chr from serial_hds[]
-				the (*class_init)() function serial_isa_class_initfn() of this dev will be called.
-			- serial_isa_class_initfn():
-			  call memory_region_init_io() to register it's memory access interface: serial_io_ops
-			  this interface is how CPU's command/data routed to the real simulated implementation.
-			  
+
 ================================================
 The core configuration data structure: QemuOptsList *vm_config_groups[32];	
 
