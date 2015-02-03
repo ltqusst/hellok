@@ -48,10 +48,12 @@ static void printxy(char *message, u32 x, u32 y)
 static char g_strtxt[1024];
 int print_scr(u32 x, u32 y, char *fmt, ...)
 {
+	int len;
 	va_list argptr;
 	va_start(argptr, fmt);
-	vspf(g_strtxt,sizeof(g_strtxt)-1, fmt, argptr);
+	len = vspf(g_strtxt,sizeof(g_strtxt)-1, fmt, argptr);
 	va_end(argptr);
 	printxy(g_strtxt, x, y);
+	return len;
 }
 

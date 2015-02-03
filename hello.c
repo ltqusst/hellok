@@ -4,12 +4,46 @@
 #include "io.h"
 #include "gdt.h"
 
+int probe_func(u8 bus, u8 slot, u8 func, int y)
+{
+	u32 dev_vendor_id;
+	u32 class_sub_prog_rev;
+	u8 header_type;
+	int x = 0;
+	dev_vendor_id = read_pci_config_u32(bus, slot, func, 0);
+	if((dev_vendor_id & 0xFFFF) == 0xffff) return 0;
+
+	header_type = read_pci_config_u8(bus, slot, 0, 0xe);
+	class_sub_prog_rev = read_pci_config_u32(bus, slot, func, 0x08);
+	x += print_scr(x, y, "BDF=%d/%d/%d(%s) dev_vendor:0x%08X   class:0x%08X",
+						  bus,slot,func, header_type&0x80?"MF":"  ", dev_vendor_id, class_sub_prog_rev);
+	return 1;
+}
+int probe_dev(u8 bus, u8 slot, int y)
+{
+	int x = 0, func = 0, cnt = 0;
+	u16 dev_id;
+	u32 class_sub_prog_rev;
+	u8 header_type;
+
+	if(probe_func(bus, slot, 0, y + 0) == 0) return 0;
+
+	header_type = read_pci_config_u8(bus, slot, 0, 0xe);
+	cnt = 1;
+	if(header_type & 0x80){
+		for(func=1;func<8;func++)
+		{
+			if(probe_func(bus, slot, func, y + cnt)) cnt++;
+		}
+	}
+	return cnt;
+}
 
 extern unsigned int bss;
 extern unsigned int bss_end;
 void kernel_main()
 {
-	int i,cr0,k;
+	int i,cr0,k,y;
 	int cnt;
 	uint8_t bus,  slot,  func;
 	uint32_t dev_vendor_id;
@@ -49,29 +83,11 @@ void kernel_main()
 		}
 		print_scr(0,5,"PCItype=%d", PCItype);
 		*/
-		cnt = 0;
+		y = 6;
 		bus = 0;
 		for(slot=0;slot<32;slot++)
-		for(func=0;func<8;func++)
 		{
-			dev_vendor_id = read_pci_config(bus, slot, func, 0);
-			if(dev_vendor_id != 0xffffffff)
-			{
-				print_scr(0, cnt+6, "BDF=%d/%d/%d  dev_vendr:0x%x",
-							bus,slot,func, dev_vendor_id);
-				cnt++;
-
-				print_scr(0,cnt+6, " %x,%x,%x,%x,%x,%x",
-							read_pci_config(bus, slot, func, 0x10),
-							read_pci_config(bus, slot, func, 0x14),
-							read_pci_config(bus, slot, func, 0x18),
-							read_pci_config(bus, slot, func, 0x1C),
-							read_pci_config(bus, slot, func, 0x20),
-							read_pci_config(bus, slot, func, 0x24)
-							);
-
-				cnt++;
-			}
+			y += probe_dev(bus, slot, y);
 		}
 		//while(1);
 	}

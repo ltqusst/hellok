@@ -71,7 +71,7 @@ static __inline__ unsigned int __get_cr0(void)
 
 // from linux: /arch/x86/pci/early.c
 // offset's lowerst 2-bit must be zero
-u32 read_pci_config(u8 bus, u8 slot, u8 func, u8 offset)
+u32 read_pci_config_u32(u8 bus, u8 slot, u8 func, u8 offset)
 {
         u32 v;
         outl(0x80000000 | (bus<<16) | (slot<<11) | (func<<8) | (offset & 0xfc), 0xcf8);
@@ -81,7 +81,7 @@ u32 read_pci_config(u8 bus, u8 slot, u8 func, u8 offset)
         return v;
 }
 
-u8 read_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset)
+u8 read_pci_config_u8(u8 bus, u8 slot, u8 func, u8 offset)
 {
         u8 v;
         outl(0x80000000 | (bus<<16) | (slot<<11) | (func<<8) | (offset & 0xfc), 0xcf8);
@@ -90,7 +90,7 @@ u8 read_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset)
         return v;
 }
 
-u16 read_pci_config_16(u8 bus, u8 slot, u8 func, u8 offset)
+u16 read_pci_config_u16(u8 bus, u8 slot, u8 func, u8 offset)
 {
         u16 v;
         outl(0x80000000 | (bus<<16) | (slot<<11) | (func<<8) | (offset & 0xfc), 0xcf8);
