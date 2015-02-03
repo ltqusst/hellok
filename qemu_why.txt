@@ -1,0 +1,206 @@
+* simple code segement comment is useless.
+* framework summary + code reference are fine
+* first we need to know how hardware is working, QEMU is just emulate it.
+* unlike embedded system with fixed configuration, PC industry having very flexible configuration
+  that user can customize, for example, having more memory/install new device, a bus is necessary for this.
+
+	about PC architecture:
+		http://en.wikipedia.org/wiki/Northbridge_(computing)
+		http://en.wikipedia.org/wiki/Southbridge_(computing)
+		http://en.wikipedia.org/wiki/Low_Pin_Count
+		http://en.wikipedia.org/wiki/Industry_Standard_Architecture
+	about x86 processor: 
+		http://en.wikipedia.org/wiki/Protected_mode
+		http://en.wikipedia.org/wiki/X86_memory_segmentation
+		http://en.wikipedia.org/wiki/Global_Descriptor_Table
+		http://www.jamesmolloy.co.uk/tutorial_html/4.-The%20GDT%20and%20IDT.html
+	about x86 IO space:
+		http://en.wikipedia.org/wiki/Input/output_base_address
+	about PCI bus
+		http://en.wikipedia.org/wiki/Conventional_PCI
+		http://en.wikipedia.org/wiki/PCI_configuration_space
+		http://wiki.osdev.org/PCI#Base_Address_Registers
+	about BIOS
+		http://en.wikipedia.org/wiki/BIOS
+		
+
+   
+================================================
+the things before main(): module register
+  
+  module is configurable component in QEMU system, 
+  it's existence is determined not statically , but by the compiler-switch, 
+  for example, when compile for host i386, the code for other host will not be compiled,
+  so those modules will not exist in the final QEMU system.
+  
+	module_init(func, type) is a micro used to make a constructor call to register module init funcion.
+	
+	and 4 type-specific module_init version
+		block_init(func): 	regiter a MODULE_INIT_BLOCK type module's init function.
+		machine_init(func): regiter a MODULE_INIT_MACHINE type module's init function.
+		qapi_init(func): 		regiter a MODULE_INIT_QAPI type module's init function.
+		type_init(func): 		regiter a MODULE_INIT_QOM type module's init function.
+	
+	these modules are only register their init function automatically before main() was called, 
+	the execution of the init function was delayed until main() call following function:
+			module_call_init(type);
+  
+	because the init function may need some pre-require.
+	
+	take an example of how a i386 pc default machine is registered and really created:
+	
+	1.register the init() function
+			hw/i386/pc_piix.c
+				line 954:  machine_init(pc_machine_init);
+	2.call the init() function in main() at appropriate time
+	  	main, line 2822:  module_call_init(MODULE_INIT_MACHINE);
+    so here pc_machine_init()will do its work: register lot of machine class(but didn't instantiate)
+	3.find out which machine class the user want:
+			main, line 2823:  machine_class = find_default_machine();
+	4.later on, after collection of all parameters, instantiate the final virtual machine for QEMU:
+		 	main, line 4264:  machine_class->init(current_machine);
+	  the init() mainly is define as(pc_init_pci()->pc_init1()) by most qemu machine typeinfo;
+	  
+	  so pc_init1() is the core init routine of virtual machine.
+================================================
+the i386 PC machine init process : pc_init1()
+ * because every thing a program can see is memory/io space, we only need to emulate things in those spaces.
+ * a very systematic analysis on QEMU start flow:
+   http://www.ibm.com/developerworks/cn/linux/1410_qiaoly_qemubios/
+ * pc_basic_device_init() create lot of basic(slow) peripheral device connected to ISA bus 
+	  including RTC, COM, Parallel, ps2_mouse, floopy.
+		- call serial_isa_init() : 
+			create TYPE_ISA_SERIAL DeviceState * dev with prop "chrdev" equal to chr from serial_hds[]
+			the (*class_init)() function serial_isa_class_initfn() of this dev will be called.
+		- serial_isa_class_initfn():
+		  call memory_region_init_io() to register it's memory access interface: serial_io_ops
+		  this interface is how CPU's command/data routed to the real simulated implementation.
+
+================================================
+how simulation of serial port is done?
+	
+	search "-serial" in "qemu-options.def"
+	hardware simulator must simulate registers, and perform the real job by some service provided by host OS(linux), the backends can be specified using -serial option.
+
+	search QEMU_OPTION_serial in vl.c: 
+		simply respond by add_device_config(DEV_SERIAL, optarg);
+		
+	search DEV_SERIAL in vl.c: 
+		later foreach_device_config(DEV_SERIAL, serial_parse);
+		
+	search serial_parse in vl.c: 
+		call qemu_chr_new() create a host device
+		the cmdline from device_config is considered as a devname that qemu_chr_new() knows.
+		the created device is stored in serial_hds[];
+		
+	qemu_chr_parse_compat() create a opts(option set):
+				.id   serial%d
+				opt(
+					backend: 	string value inferred from command line -serial xxx
+					path: 		string value inferred from finlename
+					).
+				
+	qemu_chr_new_from_opts() search through backend char drivers for with name equal to specified "backend" opt generated by 
+	above qemu_chr_parse_compat() function. if found, create a backend instance and call the driver's parse() callback.
+	and finally call qmp_chardev_add() to create the CharDriverState * chr, for pty, it will call linux system api openpty()
+	to get pty and register some read/write op with it.
+	
+	qemu_chr_fe_write_all(): we can find lot of simulated device call this function to do the job, this function will 
+	pass the call on to the backend CharDriverState * chr to do the real job.
+	
+================================================
+backend char driver
+	register_types() will be called as constructor, here lot of backend driver registered into GSList * backends;
+	the driver item have: 
+		name("socket","udp","file","tty","stdio","pty","pipe","console"...)
+		kind(CHARDEV_BACKEND_KIND_XXX)
+		parse(a callback function that 
+
+================================================
+The core configuration data structure: QemuOptsList *vm_config_groups[32];	
+
+	* a virtual machine's whole internal configuration is represented by this data structure.
+	  - see qemu_read_config_file() & qemu_read_default_config_files();
+	        the whole config is build upon Opts.
+	  - see vl.c:main(), entire opts internal representation build from command line args. 
+	
+	vl.c:main() the very first thing main() does is call qemu_add_opts() to build-up opts group entry(QemuOptsList).
+	currently total 31 opts group.
+	Opts,OptsList is a string structured option parameter(Opt);
+	
+	the implementation is complex and urgly, but the function it provides is very clean,flexible and usefull.
+	caller can access opt by group:id:name, it's like a dictionary of all options for a virtual machine, including
+	front/backend configuration.
+	
+	the last list item of vm_config_groups[31] is reserved as NULL guard.
+		name: 				drive, chardev, device, netdev, ...
+		implied_opt_name:	
+		head:				this is a list head of QemuOpts
+							QemuOpts:can be viewed as a option set
+								.id:		a string name for opts
+								.list:	parent QemuOptsList pointer
+								.loc:	
+								.head:	a list head of QemuOpt
+								
+								qemu_opts_create(list,id,...):	
+									create from list parent and an identifier string
+								
+								
+								qemu_opt_find(opts, name): 		
+									search opt in this list
+								qemu_opt_set(opts, name):  
+									create new opt entry in opts, 
+								qemu_opt_get(opts, name):  
+									retrieve str value, given opt name(if no such opt, default is returned from list->desc)
+								qemu_opt_get_bool(opts, name):  
+								qemu_opt_get_size(opts, name):  
+								qemu_opt_get_number(opts, name):  
+									bool :"on","off"
+									size : xxb/K/M/G/T ...
+									number: 1234...
+							QemuOpt:
+								.name:	a string name of the option
+								.str:	a string value, the configuration parameter
+								.desc:	a reference to the descriptor of the name/type/help/default
+								.value:	bool/uint value of parameter
+								.opts:	parent opts
+		desc:				a const list of opt name/type/help/default
+							a opt is an config option for a module.
+	QemuOpt
+	
+	once these information are added into vm_config_groups[], they are managed as a database of the system.
+	any code can search an opt by group:id pair:
+		call qemu_find_opts(group) to get list of given group;
+		call qemu_opts_find(list, id) to get QemuOpts pointer of given id 
+	id is unique string in a list is it's created by call qemu_opts_create();
+	
+	
+	qemu_opt_find
+	
+================================================
+device_config: 
+	the device here is the host device used to do the simulation backend job, not the device simulated for target.
+	type: 		very general device category(not specific model)
+	cmdline: 	a string describe what Host device will be used
+	loc:		where this config originate.
+	
+	qemu_chr_new
+================================================
+Opt pasring:
+lookup_opt() translate opts from argv[]
+	(qemu_options, each entry is l)
+
+qemu_options
+	name(xxx of the -xxx or --xxx)
+	flags(0x0001: have arg)
+	index(the corresponding enum used by code)
+
+#include "qemu-options-wrapper.h"	
+	a special way to define opt:
+		1.using C preprocessor
+		  DEF(option, opt_arg, opt_enum, opt_help, arch_mask) 
+		2.integrate all information into single file
+		   #include "qemu-options.def"
+
+
+			

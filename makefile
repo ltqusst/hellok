@@ -1,4 +1,3 @@
-
 ARCH := x86_64
 TARGET = hellok.elf
 
