@@ -1,54 +1,79 @@
-#define WHITE_SPACE 0x07
-#define VIDEO_MEMORY 0xb8000
+#include "common.h"
+#include "string.h"
+#include "monitor.h"
+#include "io.h"
+#include "gdt.h"
 
-char *videoMemory = (char*) VIDEO_MEMORY;
 
-void clrscr()
-{
-	int i;
-	for(i=0;i < (80*25*2);i+=2)
-	{
-		videoMemory[i]=' ';
-		videoMemory[i+1]=WHITE_SPACE;
-	}
-}
-
-void printxy(char *message, unsigned int x, unsigned int y)
-{
-	unsigned int i=0;
-	i=(y*80*2)+x;
-	while(*message!=0)
-	{
-		if(*message=='\n')
-		{
-			y++;
-			i=(y*80*2);
-		}else{
-			videoMemory[i++]=*message;
-			videoMemory[i++]=WHITE_SPACE;
-		}
-		*message++;
-	}
-}
 extern unsigned int bss;
 extern unsigned int bss_end;
 void kernel_main()
 {
-	int i;
-	char data[5]={0};
-
+	int i,cr0,k;
+	int cnt;
+	uint8_t bus,  slot,  func;
+	uint32_t dev_vendor_id;
+	int PCItype, tmp;
+	gdt_entry_t * p_gdt_entry;
 	for(i=0;i<bss_end-bss;i++) ((char*)bss)[i] = 0;
 
-	clrscr();
+	clr_scr();
 	for(i=0;;i++)
 	{
-		data[3] = '0'+((int)(&bss) & 0xFF);
-		data[2] = '0'+((i>>8) & 0xFF);
-		data[1] = '0'+((i>>16) & 0xFF);
-		data[0] = '0'+((i>>24) & 0xFF);
-		data[4] = 0;
-		printxy(data, 0, 2);
-		printxy("Hello World", 0, 0);
+		print_scr(0,0, "Hello World");
+		print_scr(0,1,"  iter: %d.", i);
+
+		//cr0 = __get_cr0();
+		read_cr0(cr0);
+		print_scr(0,2,"  CR0=0x%x", cr0);
+		print_scr(0,3,"  Paging :%s; %s mode;",
+					cr0 & CR0_PG?"on":"off",
+				    cr0 & CR0_PE?"Protected":"Real");
+
+		p_gdt_entry = gdt_base();
+		cnt = gdt_cnt();
+		print_scr(0,4,"gdt at 0x%x, entry count: %d", p_gdt_entry, cnt);
+		/*
+		PCItype =0;
+		outl(0, 0xCF8);
+		outl(0, 0xCFA);
+
+		if ((inl(0xCF8)==0) && (inl(0xCFA)==0))
+			PCItype=2;
+		else
+		{
+			tmp=inl(0xCF8);
+			outl(0x80000000, 0xCF8);
+			if (inl(0xCF8)==0x80000000) PCItype=1;
+			outl(tmp, 0xCF8);
+		}
+		print_scr(0,5,"PCItype=%d", PCItype);
+		*/
+		cnt = 0;
+		bus = 0;
+		for(slot=0;slot<32;slot++)
+		for(func=0;func<8;func++)
+		{
+			dev_vendor_id = read_pci_config(bus, slot, func, 0);
+			if(dev_vendor_id != 0xffffffff)
+			{
+				print_scr(0, cnt+6, "BDF=%d/%d/%d  dev_vendr:0x%x",
+							bus,slot,func, dev_vendor_id);
+				cnt++;
+
+				print_scr(0,cnt+6, " %x,%x,%x,%x,%x,%x",
+							read_pci_config(bus, slot, func, 0x10),
+							read_pci_config(bus, slot, func, 0x14),
+							read_pci_config(bus, slot, func, 0x18),
+							read_pci_config(bus, slot, func, 0x1C),
+							read_pci_config(bus, slot, func, 0x20),
+							read_pci_config(bus, slot, func, 0x24)
+							);
+
+				cnt++;
+			}
+		}
+		//while(1);
 	}
 }
 
