@@ -18,6 +18,8 @@
 		http://en.wikipedia.org/wiki/Input/output_base_address
 	about PCI bus
 		http://en.wikipedia.org/wiki/Conventional_PCI
+		http://en.wikipedia.org/wiki/PCI_configuration_space
+		http://wiki.osdev.org/PCI#Base_Address_Registers
 	about BIOS
 		http://en.wikipedia.org/wiki/BIOS
 		
